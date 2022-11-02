@@ -195,6 +195,7 @@ enum UserSelectablePins {
   GPIO_REL1_BI, GPIO_REL1_BI_INV,      // 8 x Relays bistable
   GPIO_I2S_MCLK,
   GPIO_MBR_TX, GPIO_MBR_RX,            // Modbus Bridge Serial interface
+  GPIO_WIEGAND_D0_1, GPIO_WIEGAND_D1_1,    // Wiegand Data lines
   GPIO_SENSOR_END };
 
 // Error as warning to rethink GPIO usage
@@ -437,6 +438,7 @@ const char kSensorNames[] PROGMEM =
   D_SENSOR_RELAY "_b|" D_SENSOR_RELAY "_bi|"
   D_SENSOR_I2S_MCLK "|"
   D_SENSOR_MBR_TX "|" D_SENSOR_MBR_RX "|"
+  D_SENSOR_WIEGAND_D0_1 "|" D_SENSOR_WIEGAND_D1_1 "|"
   ;
 
 const char kSensorNamesFixed[] PROGMEM =
@@ -997,6 +999,8 @@ const uint16_t kGpioNiceList[] PROGMEM = {
 #ifdef USE_WIEGAND
   AGPIO(GPIO_WIEGAND_D0),      // Date line D0 of Wiegand devices
   AGPIO(GPIO_WIEGAND_D1),      // Date line D1 of Wiegand devices
+  AGPIO(GPIO_WIEGAND_D0_1),      // Date line D0 of Wiegand devices
+  AGPIO(GPIO_WIEGAND_D1_1),      // Date line D1 of Wiegand devices
 #endif
 #ifdef USE_NEOPOOL
   AGPIO(GPIO_NEOPOOL_TX),      // Sugar Valley RS485 Interface

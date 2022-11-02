@@ -17,6 +17,9 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#define USE_WIEGAND //temporary enable for code editing
+#define USE_WEBSERVER
+
 #ifdef USE_WIEGAND
 /*********************************************************************************************\
  * Wiegand 24, 26, 32, 34 bit Rfid reader 125 kHz
@@ -54,6 +57,8 @@
 #pragma message("**** Wiegand interface enabled ****")
 
 #define XSNS_82                82
+
+#define MAX_WIEGAND_INTERFACE   2
 
 #define WIEGAND_CODE_GAP_FACTOR 3  // Gap between 2 complete RFID codes send by the device. (WIEGAND_CODE_GAP_FACTOR * bitTime) to detect the end of a code
 #define WIEGAND_BIT_TIME_DEFAULT 1250  // period time (µs) of one bit (impluse + impulse_gap time) 1250µs measured by oscilloscope on my RFID Reader
@@ -97,10 +102,10 @@ typedef struct rfid_store { uint64_t RFID; uint16_t bitCount; } RFID_store;
 class Wiegand {
   public:
     Wiegand(void);
-    void Init(void);
-    void ScanForTag(void);
+    void Init(int interface);
+    void ScanForTag(int interface);
 #ifdef USE_WEBSERVER
-    void Show(void);
+    void Show(int interface);
 #endif  // USE_WEBSERVER
 
     bool isInit = false;
@@ -108,15 +113,17 @@ class Wiegand {
     #if (DEV_WIEGAND_TEST_MODE!=1)
     private:
     #endif //(DEV_WIEGAND_TEST_MODE==1)
-    uint32_t CheckAndConvertRfid(uint64_t,uint16_t);
+    uint32_t CheckAndConvertRfid(int interface, uint64_t rfidIn, uint16_t bitCount);
     uint8_t CalculateParities(uint64_t, int);
-    bool WiegandConversion (uint64_t , uint16_t );
+    bool WiegandConversion (int interface, uint64_t rfidBuffer, uint16_t bitCount);
     void HandleKeyPad(void); //handle one tag for multi key strokes
 
     static void handleD0Interrupt(void);
     static void handleD1Interrupt(void);
-    static void handleDxInterrupt(int in); // fix #11047
-    static void ClearRFIDBuffer(int);
+    static void handleD0_1Interrupt(void);
+    static void handleD1_1Interrupt(void);
+    static void handleDxInterrupt(int interface, int in); // fix #11047
+    static void ClearRFIDBuffer(int interface, int endInd);
 
     uint32_t rfid;
     uint32_t tagSize;
@@ -124,114 +131,173 @@ class Wiegand {
     uint32_t mqttRFIDKeypadBuffer;
     uint32_t webRFIDKeypadBuffer;
 
-    static volatile uint64_t rfidBuffer;
-    static volatile uint16_t bitCount;
-    static volatile uint32_t lastFoundTime;
+    static volatile uint64_t rfidBuffer[];
+    static volatile uint16_t bitCount[];
+    static volatile uint32_t lastFoundTime[];
     // fix #11047
-    static volatile uint32_t bitTime;
-    static volatile uint32_t FirstBitTimeStamp;
-    static volatile uint32_t CodeGapTime;
-    static volatile bool CodeComplete;
+    static volatile uint32_t bitTime[];
+    static volatile uint32_t FirstBitTimeStamp[];
+    static volatile uint32_t CodeGapTime[];
+    static volatile bool CodeComplete[];
     static volatile RFID_store rfid_found[];
-    static volatile int currentFoundRFIDcount;
+    static volatile RFID_store rfid_found_1[];
+    static volatile int currentFoundRFIDcount[];
+
+    // static uint64_t rfidBuffer[];
+    // static uint16_t bitCount[];
+    // static uint32_t lastFoundTime[];
+    // // fix #11047
+    // static uint32_t bitTime[];
+    // static uint32_t FirstBitTimeStamp[];
+    // static uint32_t CodeGapTime[];
+    // static bool CodeComplete[];
+    // static RFID_store rfid_found[];
+    // static RFID_store rfid_found_1[];
+    // static int currentFoundRFIDcount[];    
 };
 
-Wiegand* oWiegand = new Wiegand();
+Wiegand oWiegand[MAX_WIEGAND_INTERFACE];
 
-volatile uint64_t Wiegand::rfidBuffer;
-volatile uint16_t Wiegand::bitCount;
-volatile uint32_t Wiegand::lastFoundTime;
+volatile uint64_t Wiegand::rfidBuffer[MAX_WIEGAND_INTERFACE];
+volatile uint16_t Wiegand::bitCount[MAX_WIEGAND_INTERFACE];
+volatile uint32_t Wiegand::lastFoundTime[MAX_WIEGAND_INTERFACE];
 // fix for #11047
-volatile uint32_t Wiegand::bitTime;
-volatile uint32_t Wiegand::FirstBitTimeStamp;
-volatile uint32_t Wiegand::CodeGapTime;
-volatile bool Wiegand::CodeComplete;
+volatile uint32_t Wiegand::bitTime[MAX_WIEGAND_INTERFACE];
+volatile uint32_t Wiegand::FirstBitTimeStamp[MAX_WIEGAND_INTERFACE];
+volatile uint32_t Wiegand::CodeGapTime[MAX_WIEGAND_INTERFACE];
+volatile bool Wiegand::CodeComplete[MAX_WIEGAND_INTERFACE];
 volatile RFID_store Wiegand::rfid_found[WIEGAND_RFID_ARRAY_SIZE];
-volatile int Wiegand::currentFoundRFIDcount;
+volatile RFID_store Wiegand::rfid_found_1[WIEGAND_RFID_ARRAY_SIZE];
+volatile int Wiegand::currentFoundRFIDcount[MAX_WIEGAND_INTERFACE];
 
-void IRAM_ATTR Wiegand::ClearRFIDBuffer(int endIndex = WIEGAND_RFID_ARRAY_SIZE) {
-  currentFoundRFIDcount = WIEGAND_RFID_ARRAY_SIZE - endIndex; // clear all buffers
+// uint64_t Wiegand::rfidBuffer[MAX_WIEGAND_INTERFACE];
+// uint16_t Wiegand::bitCount[MAX_WIEGAND_INTERFACE];
+// uint32_t Wiegand::lastFoundTime[MAX_WIEGAND_INTERFACE];
+// // fix for #11047
+// uint32_t Wiegand::bitTime[MAX_WIEGAND_INTERFACE];
+// uint32_t Wiegand::FirstBitTimeStamp[MAX_WIEGAND_INTERFACE];
+// uint32_t Wiegand::CodeGapTime[MAX_WIEGAND_INTERFACE];
+// bool Wiegand::CodeComplete[MAX_WIEGAND_INTERFACE];
+// RFID_store Wiegand::rfid_found[WIEGAND_RFID_ARRAY_SIZE];
+// RFID_store Wiegand::rfid_found_1[WIEGAND_RFID_ARRAY_SIZE];
+// int Wiegand::currentFoundRFIDcount[MAX_WIEGAND_INTERFACE];
+
+void IRAM_ATTR Wiegand::ClearRFIDBuffer(int interface, int endIndex = WIEGAND_RFID_ARRAY_SIZE) {
+  currentFoundRFIDcount[interface] = WIEGAND_RFID_ARRAY_SIZE - endIndex; // clear all buffers
+  volatile RFID_store *pRfidStore = (interface == 0) ? rfid_found : rfid_found_1;
+
   for (uint32_t i = 0; i < endIndex; i++) {
-    rfid_found[i].RFID=0;
-    rfid_found[i].bitCount=0;
+    pRfidStore[i].RFID = 0;
+    pRfidStore[i].bitCount = 0;
   }
 }
 
+void IRAM_ATTR Wiegand::handleD1_1Interrupt() {  // Receive a 1 bit. (D0=high & D1=low)
+  handleDxInterrupt(1, 1);
+}
+
+void IRAM_ATTR Wiegand::handleD0_1Interrupt() {  // Receive a 0 bit. (D0=low & D1=high)
+  handleDxInterrupt(1, 0);
+}
+
 void IRAM_ATTR Wiegand::handleD1Interrupt() {  // Receive a 1 bit. (D0=high & D1=low)
-  handleDxInterrupt(1);
+  handleDxInterrupt(0, 1);
 }
 
 void IRAM_ATTR Wiegand::handleD0Interrupt() {  // Receive a 0 bit. (D0=low & D1=high)
-  handleDxInterrupt(0);
+  handleDxInterrupt(0, 0);
 }
 
-void IRAM_ATTR Wiegand::handleDxInterrupt(int in) {
+void IRAM_ATTR Wiegand::handleDxInterrupt(int interface, int in) {
   uint32_t curTime = micros();  // to be sure I will use micros() instead of millis() overflow is handle by using the minus operator to compare
-  uint32_t diffTime = curTime - lastFoundTime;
-  if ((diffTime > CodeGapTime) && (bitCount > 0)) {
+  uint32_t diffTime = curTime - lastFoundTime[interface];
+  if ((diffTime > CodeGapTime[interface]) && (bitCount[interface] > 0)) {
     // previous RFID tag (key pad numer)is complete. Will be detected by the code ending gap
     // one bit will take the time of impulse_time + impulse_gap_time. it (bitTime) will be recalculated each time an impulse is detected
     // the devices will add some inter_code_gap_time to separate codes this will be much longer than the bit_time. (WIEGAND_CODE_GAP_FACTOR)
     // unfortunately there's no timing defined for Wiegand. On my test reader the impulse time = 125 µs impulse gap time = 950 µs.
-    if (currentFoundRFIDcount < WIEGAND_RFID_ARRAY_SIZE) { // when reaching the end of rfid buffer we will overwrite the last one.
-      currentFoundRFIDcount++;
+    if (currentFoundRFIDcount[interface] < WIEGAND_RFID_ARRAY_SIZE) { // when reaching the end of rfid buffer we will overwrite the last one.
+      currentFoundRFIDcount[interface]++;
     }
     // start a new tag
-    rfidBuffer = 0;
-    bitCount = 0;
-    FirstBitTimeStamp = 0;
+    rfidBuffer[interface] = 0;
+    bitCount[interface] = 0;
+    FirstBitTimeStamp[interface] = 0;
   }
 
-  if (in == 0) { rfidBuffer = rfidBuffer << 1; } // Receive a 0 bit. (D0=low & D1=high): Leftshift the 0 bit is now at the end of rfidBuffer
-  else if (in == 1)  {rfidBuffer = (rfidBuffer << 1) | 1; }    // Receive a 1 bit. (D0=high & D1=low): Leftshift + 1 bit
+  if (in == 0) { rfidBuffer[interface] = rfidBuffer[interface] << 1; } // Receive a 0 bit. (D0=low & D1=high): Leftshift the 0 bit is now at the end of rfidBuffer
+  else if (in == 1)  {rfidBuffer[interface] = (rfidBuffer[interface] << 1) | 1; }    // Receive a 1 bit. (D0=high & D1=low): Leftshift + 1 bit
   else { return; } // (in==3) called by ScanForTag to get the last tag, because the interrupt handler is no longer called after receiving the last bit
 
-  bitCount++;
-  if (bitCount == 1) { // first bit was detected
-    FirstBitTimeStamp = (curTime != 0) ? curTime : 1; // accept 1µs differenct to avoid a miss the first timestamp if curTime is 0.
+  bitCount[interface]++;
+  if (bitCount[interface] == 1) { // first bit was detected
+    FirstBitTimeStamp[interface] = (curTime != 0) ? curTime : 1; // accept 1µs differenct to avoid a miss the first timestamp if curTime is 0.
   }
-  else if (bitCount == 2) { // only calculate once per RFID tag, but restrict to values, which are in within a plausible range
-    bitTime = ((diffTime > (WIEGAND_BIT_TIME_DEFAULT / 4)) && (diffTime < (4 * WIEGAND_BIT_TIME_DEFAULT))) ? diffTime : WIEGAND_BIT_TIME_DEFAULT;
-    CodeGapTime = WIEGAND_CODE_GAP_FACTOR * bitTime;
+  else if (bitCount[interface] == 2) { // only calculate once per RFID tag, but restrict to values, which are in within a plausible range
+    bitTime[interface] = ((diffTime > (WIEGAND_BIT_TIME_DEFAULT / 4)) && (diffTime < (4 * WIEGAND_BIT_TIME_DEFAULT))) ? diffTime : WIEGAND_BIT_TIME_DEFAULT;
+    CodeGapTime[interface] = WIEGAND_CODE_GAP_FACTOR * bitTime[interface];
   }
   //save current rfid in array otherwise we will never see the last found tag
-  rfid_found[currentFoundRFIDcount].RFID=rfidBuffer;
-  rfid_found[currentFoundRFIDcount].bitCount= bitCount;
-  lastFoundTime = curTime; // Last time a bit was detected
+  volatile RFID_store *pRfidStore = (interface == 0) ? rfid_found : rfid_found_1;
+  pRfidStore[currentFoundRFIDcount[interface]].RFID = rfidBuffer[interface];
+  pRfidStore[currentFoundRFIDcount[interface]].bitCount = bitCount[interface];
+
+  lastFoundTime[interface] = curTime; // Last time a bit was detected
 }
 
 Wiegand::Wiegand() {
   rfid = 0;
-  lastFoundTime = 0;
+  lastFoundTime[0] = lastFoundTime[1] = 0;  
   tagSize = 0;
-  rfidBuffer = 0;
-  bitCount = 0 ;
+  rfidBuffer[0] = rfidBuffer[1] = 0;
+  bitCount[0] = bitCount[1] = 0 ;
   isInit = false;
   // fix #11047
-  bitTime = WIEGAND_BIT_TIME_DEFAULT;
-  FirstBitTimeStamp = 0;
-  CodeGapTime = WIEGAND_CODE_GAP_FACTOR * bitTime;
-  CodeComplete = false;
-  ClearRFIDBuffer();
+  bitTime[0] = bitTime[1] = WIEGAND_BIT_TIME_DEFAULT;
+  FirstBitTimeStamp[0] = FirstBitTimeStamp[0] = 0;
+  CodeGapTime[0] = CodeGapTime[1] = WIEGAND_CODE_GAP_FACTOR * bitTime[0];
+  CodeComplete[0] = CodeComplete[1] = false;
+  ClearRFIDBuffer(0);
+  ClearRFIDBuffer(1);
   outFormat="u";  // standard output format decimal
   mqttRFIDKeypadBuffer = 0;
   webRFIDKeypadBuffer = 0;
 }
 
-void Wiegand::Init() {
+void Wiegand::Init(int interface) {
+  uint32_t d0Pin;
+  uint32_t d1Pin;
+
   isInit = false;
-  if (PinUsed(GPIO_WIEGAND_D0) && PinUsed(GPIO_WIEGAND_D1)) {  // Only start, if the Wiegang pins are selected
+
+  if (interface == 0){
+    d0Pin = GPIO_WIEGAND_D0;
+    d1Pin = GPIO_WIEGAND_D1;
+  }
+  else{
+    d0Pin = GPIO_WIEGAND_D0_1;
+    d1Pin = GPIO_WIEGAND_D1_1;
+  }
+
+  if (PinUsed(d0Pin) && PinUsed(d1Pin)) {  // Only start, if the Wiegang pins are selected
 #if (DEV_WIEGAND_TEST_MODE)>0
     AddLog(LOG_LEVEL_INFO, PSTR("WIE: Init()"));
 #endif  // DEV_WIEGAND_TEST_MODE>0
-    pinMode(Pin(GPIO_WIEGAND_D0), INPUT_PULLUP);
-    pinMode(Pin(GPIO_WIEGAND_D1), INPUT_PULLUP);
+    pinMode(Pin(d0Pin), INPUT_PULLUP);
+    pinMode(Pin(d1Pin), INPUT_PULLUP);
 #if (DEV_WIEGAND_TEST_MODE==1) // overwrite the setting
     pinMode(Pin(GPIO_WIEGAND_D0), OUTPUT);
     pinMode(Pin(GPIO_WIEGAND_D1), OUTPUT);
 #endif //(DEV_WIEGAND_TEST_MODE==1)
-    attachInterrupt(Pin(GPIO_WIEGAND_D0), handleD0Interrupt, FALLING);
-    attachInterrupt(Pin(GPIO_WIEGAND_D1), handleD1Interrupt, FALLING);
+    if (interface == 0){
+      attachInterrupt(Pin(d0Pin), handleD0Interrupt, FALLING);
+      attachInterrupt(Pin(d1Pin), handleD1Interrupt, FALLING);
+    }
+    else{
+      attachInterrupt(Pin(d0Pin), handleD0_1Interrupt, FALLING);
+      attachInterrupt(Pin(d1Pin), handleD1_1Interrupt, FALLING);
+    }
+    
     isInit = true;                                             // Helps to run only if correctly setup
 #if (DEV_WIEGAND_TEST_MODE)>0
     AddLog(LOG_LEVEL_INFO, PSTR("WIE: Testmode, D0:%u, D1:%u"), Pin(GPIO_WIEGAND_D0), Pin(GPIO_WIEGAND_D1));        // For tests without reader attaiched
@@ -246,7 +312,7 @@ void Wiegand::Init() {
 #endif  // DEV_WIEGAND_TEST_MODE>0
 }
 
-uint32_t Wiegand::CheckAndConvertRfid(uint64_t rfidIn, uint16_t bitCount) {
+uint32_t Wiegand::CheckAndConvertRfid(int interface, uint64_t rfidIn, uint16_t bitCount) {
   uint8_t evenParityBit = 0;
   uint8_t oddParityBit = (uint8_t) (rfidIn & 0x1);  // Last bit = odd parity
   uint8_t calcParity = 0;
@@ -314,14 +380,14 @@ uint8_t Wiegand::CalculateParities(uint64_t tagWithoutParities, int tag_size = 2
   return retValue;
 }
 
-bool Wiegand::WiegandConversion (uint64_t rfidBuffer, uint16_t bitCount) {
+bool Wiegand::WiegandConversion (int interface, uint64_t rfidBuffer, uint16_t bitCount) {
   bool bRet = false;
 #if (DEV_WIEGAND_TEST_MODE)>0
   AddLog(LOG_LEVEL_INFO, PSTR("WIE: Raw tag %_X, Bit count %u"), &rfidBuffer, bitCount);  // Print up to uint64_t
 #endif  // DEV_WIEGAND_TEST_MODE>0
   if ((24 == bitCount) || (26 == bitCount) || (32 == bitCount) || (34 == bitCount)) {
     // 24, 26, 32, 34-bit Wiegand codes
-    rfid = CheckAndConvertRfid(rfidBuffer, bitCount);
+    rfid = CheckAndConvertRfid(interface, rfidBuffer, bitCount);
     tagSize = bitCount;
     bRet = true;
   }
@@ -378,18 +444,20 @@ void Wiegand::HandleKeyPad(void) { // will be called if a valid key pad input wa
   }
 }
 
-void Wiegand::ScanForTag() {
+void Wiegand::ScanForTag(int interface) {
   uint32_t startTime = micros();
-  handleDxInterrupt(3);
+  handleDxInterrupt(interface, 3);
   if (currentFoundRFIDcount > 0) {
-    uint32_t lastFoundRFIDcount = currentFoundRFIDcount;
+    uint32_t lastFoundRFIDcount = currentFoundRFIDcount[interface];
 #if (DEV_WIEGAND_TEST_MODE)>0
     AddLog(LOG_LEVEL_INFO, PSTR("WIE: ScanForTag(). bitTime: %u lastFoundTime: %u RFIDS in buffer: %u"), bitTime, lastFoundTime, currentFoundRFIDcount);
 #endif
     for (uint32_t i = 0; i < WIEGAND_RFID_ARRAY_SIZE; i++) {
-  	  if (rfid_found[i].RFID != 0 || (rfid_found[i].RFID == 0 && i == 0)) {
+      volatile RFID_store *pRfidStore = (interface == 0) ? rfid_found : rfid_found_1;      
+
+  	  if (pRfidStore[i].RFID != 0 || (pRfidStore[i].RFID == 0 && i == 0)) {
         uint32_t oldTag = rfid;
-        bool validKey =  WiegandConversion(rfid_found[i].RFID, rfid_found[i].bitCount);
+        bool validKey =  WiegandConversion(interface, pRfidStore[i].RFID, pRfidStore[i].bitCount);
 #if (DEV_WIEGAND_TEST_MODE)>0
         AddLog(LOG_LEVEL_INFO, PSTR("WIE: ValidKey %d, Previous tag %u"), validKey, oldTag);
 #endif  // DEV_WIEGAND_TEST_MODE>0
@@ -399,7 +467,7 @@ void Wiegand::ScanForTag() {
             if (oldTag == rfid) {
               AddLog(LOG_LEVEL_DEBUG, PSTR("WIE: Old tag"));
             }
-            ResponseTime_P(PSTR(",\"Wiegand\":{\"UID\":"));
+            ResponseTime_P(PSTR(",\"Wiegand %u\":{\"UID\":"), interface);
             if (GetOption(WIEGAND_OPTION_HEX) == 0) {
               ResponseAppend_P(PSTR("%u"), rfid);
             } else {
@@ -411,12 +479,12 @@ void Wiegand::ScanForTag() {
         }
       }
     }
-    if (currentFoundRFIDcount > lastFoundRFIDcount) {
+    if (currentFoundRFIDcount[interface] > lastFoundRFIDcount) {
       // if that happens: we need to move the id found during the loop to top of the array
       // and correct the currentFoundRFIDcount
       AddLog(LOG_LEVEL_INFO, PSTR("WIE: ScanForTag() %u tags added while working on buffer"), (currentFoundRFIDcount - lastFoundRFIDcount));
     }
-    ClearRFIDBuffer(); //reset array
+    ClearRFIDBuffer(interface); //reset array
 #if (DEV_WIEGAND_TEST_MODE)>0
     AddLog(LOG_LEVEL_INFO, PSTR("WIE: ScanForTag() time elapsed %u"), (micros() - startTime));
 #endif
@@ -424,8 +492,8 @@ void Wiegand::ScanForTag() {
 }
 
 #ifdef USE_WEBSERVER
-void Wiegand::Show(void) {
-  WSContentSend_P(PSTR("{s}Wiegand UID{m}"));
+void Wiegand::Show(int interface) {
+  WSContentSend_P(PSTR("{s}Wiegand%u UID{m}"), interface);
   if (GetOption(WIEGAND_OPTION_HEX) == 0) {
     WSContentSend_P(PSTR("%u"), (tagSize > 0) ? rfid : webRFIDKeypadBuffer);
   } else {
@@ -620,17 +688,20 @@ const char kWiegandCommands[] PROGMEM = "Wie|"  // No prefix
 bool Xsns82(byte function) {
   bool result = false;
 
-  if (FUNC_INIT == function) {
-    oWiegand->Init();
+  if (FUNC_INIT == function) {    
+    oWiegand[0].Init(0);
+    oWiegand[1].Init(1);
   }
-  else if (oWiegand->isInit) {
+  else if (oWiegand[0].isInit && oWiegand[1].isInit) {
     switch (function) {
       case FUNC_EVERY_100_MSECOND:       // fix for #11047 Wiegand 26/34 missed some key press
-        oWiegand->ScanForTag();
+        oWiegand[0].ScanForTag(0);
+        oWiegand[1].ScanForTag(1);
         break;
 #ifdef USE_WEBSERVER
       case FUNC_WEB_SENSOR:
-        oWiegand->Show();
+        oWiegand[0].Show(0);
+        oWiegand[1].Show(1);
         break;
 #endif  // USE_WEBSERVER
 #if (DEV_WIEGAND_TEST_MODE==1)
@@ -642,5 +713,4 @@ bool Xsns82(byte function) {
   }
   return result;
 }
-
 #endif  // USE_WIEGAND

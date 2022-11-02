@@ -303,6 +303,9 @@ const be_const_member_t lv_gpio_constants[] = {
     { "MBR_RX", (int32_t) GPIO_MBR_RX },
     { "MBR_TX", (int32_t) GPIO_MBR_TX },
 
+    { "WIEGAND_D0_1", (int32_t) GPIO_WIEGAND_D0_1 },
+    { "WIEGAND_D1_1", (int32_t) GPIO_WIEGAND_D1_1 },
+
 };
 
 const size_t lv_gpio_constants_size = sizeof(lv_gpio_constants)/sizeof(lv_gpio_constants[0]);
